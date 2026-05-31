@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hfg / system-grid</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #f4f4f4;
+      color: #111111;
+      font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      line-height: 1.5;
+      letter-spacing: 0.02em;
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .ulm-container {
+      display: grid;
+      grid-template-columns: 180px 400px;
+      gap: 32px;
+      width: 612px;
+    }
+
+    .metadata {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-top: 1px solid #111111;
+      padding-top: 12px;
+      text-transform: lowercase;
+    }
+
+    .metadata h1 {
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+
+    .project-info {
+      margin-bottom: auto;
+    }
+
+    .project-info p {
+      margin-bottom: 8px;
+      color: #666666;
+    }
+
+    .system-status {
+      font-weight: 500;
+    }
+
+    #sketch-holder {
+      width: 400px;
+      height: 560px;
+      background-color: #ffffff;
+      position: relative;
+    }
+
+    #sketch-holder canvas {
+      display: block;
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+</head>
+<body>
+
+  <div class="ulm-container">
+    
+    <div class="metadata">
+      <div>
+        <h1>Re:Constructs V1</h1>
+        <div class="project-info">
+          <p>project: Art1</p>
+          <p>Year: 1970 </p>
+          <p>edition: PAGE 7</p>
+        </div>
+      </div>
+      
+      <div class="system-status">
+        status: system ready
+      </div>
+    </div>
+
+    <div id="sketch-holder"></div>
+
+  </div>
+
+  <script src="sketch.js"></script>
+
+</body>
+</html>
