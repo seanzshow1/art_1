@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hfg / re:constructs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #f2f0eb;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 40px;
+        }
+
+        /* -------------------------------------------------------
+           OUTER WRAPPER
+           Fixed height is the key fix: without it, the grid row
+           expands as typewriter text grows, which stretches the
+           image column alongside it. 560px locks both columns to
+           the same height forever.
+        ------------------------------------------------------- */
+        .ulm-wrap {
+            font-family: 'Special Elite', 'Courier New', monospace;
+            background: #f2f0eb;
+            width: 820px;
+            height: 560px;
+            /* was min-height -- changed to height */
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            position: relative;
+            overflow: hidden;
+            /* clips anything that bleeds out */
+        }
+
+        /* -------------------------------------------------------
+           IMAGE COLUMN
+           100% height of the fixed wrapper, image fills it with
+           object-fit: cover so it never distorts or resizes.
+        ------------------------------------------------------- */
+        .ulm-image {
+            position: relative;
+            overflow: hidden;
+            height: 100%;
+            /* fill the fixed wrapper height */
+        }
+
+        .ulm-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center top;
+            display: block;
+            filter: contrast(1.08) brightness(0.97);
+        }
+
+        /* Soft fade from image into the background on the right edge */
+        .ulm-image::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 60px;
+            height: 100%;
+            background: linear-gradient(to right, transparent, #f2f0eb);
+            pointer-events: none;
+        }
+
+        /* -------------------------------------------------------
+           CONTENT COLUMN
+           Also locked to the wrapper height, with overflow hidden
+           so growing text does not push the card taller.
+        ------------------------------------------------------- */
+        .ulm-content {
+            display: grid;
+            grid-template-columns: 100px 1fr;
+            padding: 48px 48px 48px 32px;
+            position: relative;
+            height: 100%;
+            /* fill the fixed wrapper height */
+            overflow: hidden;
+            /* text growth stays invisible below */
+        }
+
+        /* Thin vertical rule between sidebar and main content */
+        .ulm-rule {
+            position: absolute;
+            top: 0;
+            left: 132px;
+            width: 1px;
+            height: 100%;
+            background: #111;
+            opacity: 0.15;
+        }
+
+        /* -------------------------------------------------------
+           SIDEBAR
+           Metadata labels (re:constructs, artist, year).
+        ------------------------------------------------------- */
+        .ulm-sidebar {
+            padding-top: 2px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
+        }
+
+        .ulm-label {
+            font-size: 9px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: #999;
+            line-height: 1.4;
+        }
+
+        .ulm-label span {
+            display: block;
+            color: #111;
+            font-weight: 500;
+            margin-top: 4px;
+            letter-spacing: 0.05em;
+            font-size: 9px;
+            text-transform: lowercase;
+        }
+
+        /* -------------------------------------------------------
+           MAIN AREA
+           Flex column; quote + typewriter stacked vertically.
+           Overflow hidden here too, so text that exceeds the
+           visible area just disappears below the frame.
+        ------------------------------------------------------- */
+        .ulm-main {
+            padding-left: 24px;
+            border-left: 1px solid rgba(17, 17, 17, 0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* belt-and-suspenders clip */
+        }
+
+        /* Top border + section title above the quote */
+        .ulm-header {
+            border-top: 2px solid #111;
+            padding-top: 12px;
+            margin-bottom: 48px;
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
+            flex-shrink: 0;
+            /* never compress the header */
+        }
+
+        .ulm-title {
+            font-size: 9px;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: #777;
+        }
+
+        /* Body flex container: quote + divider + typewriter */
+        .ulm-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* keeps body from pushing past main */
+        }
+
+        /* -------------------------------------------------------
+           QUOTE BLOCK
+           Fades in on load. flex-shrink:0 prevents it from being
+           squashed if the body runs short on space.
+        ------------------------------------------------------- */
+        .quote-block {
+            font-family: 'Special Elite', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 2;
+            letter-spacing: 0.03em;
+            color: #1a1a1a;
+            max-width: 380px;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        .quote-block.visible {
+            opacity: 1;
+        }
+
+        .quote-attribution {
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
+            font-size: 9px;
+            letter-spacing: 0.12em;
+            color: #777;
+            margin-top: 8px;
+        }
+
+        /* Short horizontal rule between the quote and the typewriter text */
+        .section-divider {
+            width: 24px;
+            height: 1px;
+            background: #111;
+            margin: 28px 0;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity 0.6s ease;
+        }
+
+        .section-divider.visible {
+            opacity: 0.2;
+        }
+
+        /* -------------------------------------------------------
+           TYPEWRITER TEXT
+           overflow: hidden clips text that extends below the
+           visible card area as more characters are typed.
+        ------------------------------------------------------- */
+        .typewriter-text {
+            font-size: 13px;
+            line-height: 2;
+            letter-spacing: 0.03em;
+            color: #1a1a1a;
+            max-width: 380px;
+            overflow: hidden;
+        }
+
+        /* Blinking block cursor appended during typing */
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 14px;
+            background: #111;
+            vertical-align: text-bottom;
+            margin-left: 1px;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0;
+            }
+        }
+
+        /* "enter the archive" link: fades in after typing finishes */
+        .enter-link {
+            display: inline-block;
+            margin-top: 28px;
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
+            font-size: 9px;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: #111;
+            text-decoration: none;
+            border-bottom: 1px solid #111;
+            padding-bottom: 2px;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+        }
+
+        .enter-link.visible {
+            opacity: 1;
+        }
+
+        .enter-link:hover {
+            color: #555;
+            border-color: #555;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="ulm-wrap">
+
+        <!-- LEFT: image panel (fixed height, never resizes) -->
+        <div class="ulm-image">
+            <img src="art1.png" alt="ART1 dot matrix computer art, Katherine Nash and Richard Williams, 1970">
+        </div>
+
+        <!-- RIGHT: metadata sidebar + main text area -->
+        <div class="ulm-content">
+
+            <!-- Decorative vertical rule -->
+            <div class="ulm-rule"></div>
+
+            <!-- Sidebar: series name, artist, year -->
+            <div class="ulm-sidebar">
+                <div class="ulm-label">re:constructs<span>Art1</span></div>
+                <div class="ulm-label">artist<span>katherine nash</span></div>
+                <div class="ulm-label">year<span>1970</span></div>
+            </div>
+
+            <!-- Main: header + animated body -->
+            <div class="ulm-main">
+
+                <div class="ulm-header">
+                    <div class="ulm-title">re:constructs &mdash; opening sequence</div>
+                </div>
+
+                <div class="ulm-body">
+
+                    <!-- 1. Quote fades in first -->
+                    <div class="quote-block" id="quote-block">
+                        No artist can ignore the computer. He will have to adjust to it, cope with it, or use it. He
+                        cannot reject it. It will influence his creative thinking, as all aspects of society have always
+                        influenced the artist.
+                        <div class="quote-attribution">-- Katherine Nash, 1970</div>
+                    </div>
+
+                    <!-- 2. Thin rule fades in between quote and typewriter text -->
+                    <div class="section-divider" id="section-divider"></div>
+
+                    <!-- 3. Typewriter text appears character by character -->
+                    <div class="typewriter-text" id="tw-output"></div>
+
+                    <!-- 4. CTA link fades in after typing completes -->
+                    <a href="art1.html" class="enter-link" id="enter-link">enter the archive &rarr;</a>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Full text to be typed out in the typewriter section
+        const typeText = `ART1 was one of the first systems to let artists write their own computer programs -- developed by Richard Williams and Katherine Nash at the University of Minnesota in 1970. This archive collects the materials around it: documentation, outputs, references, and traces.
+
+Hover over the grid to move through the collection. Click any cell to open its source.`;
+
+        // Element references
+        const quoteBlock = document.getElementById("quote-block");
+        const divider = document.getElementById("section-divider");
+        const output = document.getElementById("tw-output");
+        const enterLink = document.getElementById("enter-link");
+
+        // Blinking cursor element (appended after each character during typing)
+        const cursor = document.createElement("span");
+        cursor.className = "cursor";
+
+        let i = 0; // current character index in typeText
+
+        // Recursive typewriter: appends one character at a time with
+        // variable delay to mimic natural keystroke rhythm.
+        function type() {
+            if (i < typeText.length) {
+                const ch = typeText[i];
+
+                // Handle newlines: single \n = line break,
+                // double \n\n = paragraph gap (two <br> elements)
+                if (ch === "\n") {
+                    output.appendChild(document.createElement("br"));
+                    if (typeText[i + 1] === "\n") {
+                        output.appendChild(document.createElement("br"));
+                        i++; // skip the second \n
+                    }
+                } else {
+                    output.appendChild(document.createTextNode(ch));
+                }
+
+                // Keep cursor at the end of typed content
+                output.appendChild(cursor);
+                i++;
+
+                // Vary delay by character type for a natural feel
+                const delay =
+                    ch === "." ? 90 :
+                        ch === "," ? 60 :
+                            ch === " " ? 25 :
+                                20 + Math.random() * 20;
+
+                setTimeout(type, delay);
+
+            } else {
+                // Typing complete: remove cursor, then fade in the CTA link
+                if (cursor.parentNode) cursor.parentNode.removeChild(cursor);
+                setTimeout(() => enterLink.classList.add("visible"), 400);
+            }
+        }
+
+        // Sequence:
+        // 200ms  -- quote fades in
+        // 900ms  -- divider fades in
+        // 1200ms -- typewriter starts
+        setTimeout(() => quoteBlock.classList.add("visible"), 200);
+        setTimeout(() => divider.classList.add("visible"), 900);
+        setTimeout(type, 1200);
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hfg / system-grid</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #f4f4f4;
+      color: #111111;
+      font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      line-height: 1.5;
+      letter-spacing: 0.02em;
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Two-column layout: metadata sidebar | p5 canvas */
+    .ulm-container {
+      display: grid;
+      grid-template-columns: 180px 400px;
+      gap: 32px;
+      width: 612px;
+    }
+
+    /* Sidebar: top border rule, instruction, metadata fields */
+    .metadata {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid #111111;
+      padding-top: 12px;
+      text-transform: lowercase;
+    }
+
+    .metadata h1 {
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .instruction {
+      color: #111111;
+      margin-bottom: 24px;
+      max-width: 150px;
+    }
+
+    .project-info p {
+      margin-bottom: 8px;
+      color: #666666;
+    }
+
+    /* The p5 canvas is mounted here */
+    #sketch-holder {
+      width: 400px;
+      height: 560px;
+      background-color: #ffffff;
+      position: relative;
+    }
+
+    #sketch-holder canvas {
+      display: block;
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+</head>
+
+<body>
+
+  <div class="ulm-container">
+
+    <!-- Sidebar: archive metadata and instruction -->
+    <div class="metadata">
+      <div>
+        <h1>Re:Constructs V1</h1>
+        <p class="instruction">move around the grid to explore the archive.</p>
+        <div class="project-info">
+          <p>project: Art1</p>
+          <p>year: 1970</p>
+          <p>artist: Katherine Nash</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- p5.js mounts its canvas here -->
+    <div id="sketch-holder"></div>
+
+  </div>
+
+  <script>
+    // ——— GLOBALS ————————————————————————————————————————————————
+
+    let sizeSlider;
+    let colsSlider;
+    let rowsSlider;
+    let gapSlider;
+    let randomButton;
+
+    let links = []; // one URL per Are.na block (source or block page)
+    let descriptions = []; // one title/label per block
+    let arenaImages = []; // one p5 image, or null, per block
+
+    const CHANNEL_SLUG = "re-constructs";
+    const API_URL = `https://api.are.na/v2/channels/${CHANNEL_SLUG}/contents?per=16`;
+
+    // ——— ARE.NA DATA LOAD ——————————————————————————————————————
+
+    async function loadArenaChannel() {
+      try {
+        const response = await fetch(API_URL);
+        const data = await response.json();
+
+        links = [];
+        descriptions = [];
+
+        // Pre-fill with nulls so indices stay stable while images load async
+        arenaImages = new Array(data.contents.length).fill(null);
+
+        data.contents.forEach((block, index) => {
+
+          // Prefer the block's outward source URL; fall back to its Are.na page
+          if (block.source && block.source.url) {
+            links.push(block.source.url);
+          } else {
+            links.push(`https://www.are.na/block/${block.id}`);
+          }
+
+          // Use whatever title Are.na gives us
+          descriptions.push(
+            block.title ||
+            block.generated_title ||
+            block.class ||
+            "untitled are.na block"
+          );
+
+          // Kick off async image load if the block has one; store by index
+          if (block.image && block.image.display && block.image.display.url) {
+            loadImage(
+              block.image.display.url,
+              img => { arenaImages[index] = img; },
+              () => { arenaImages[index] = null; }
+            );
+          }
+        });
+
+      } catch (error) {
+        console.error("Are.na load failed:", error);
+        links = ["#"];
+        descriptions = ["could not load are.na channel"];
+        arenaImages = [null];
+      }
+    }
+
+    // ——— IMAGE HELPER ——————————————————————————————————————————
+
+    // Draws img centred and letter-boxed to fit inside the given box,
+    // preserving aspect ratio (no cropping).
+    function drawImageContained(img, boxX, boxY, boxW, boxH) {
+      let imgRatio = img.width / img.height;
+      let boxRatio = boxW / boxH;
+
+      let drawW, drawH;
+
+      if (imgRatio > boxRatio) {
+        drawW = boxW;
+        drawH = boxW / imgRatio;
+      } else {
+        drawH = boxH;
+        drawW = boxH * imgRatio;
+      }
+
+      let drawX = boxX + (boxW - drawW) / 2;
+      let drawY = boxY + (boxH - drawH) / 2;
+
+      image(img, drawX, drawY, drawW, drawH);
+    }
+
+    // ——— SETUP ————————————————————————————————————————————————
+
+    function setup() {
+      let canvas = createCanvas(400, 560);
+      canvas.parent("sketch-holder");
+
+      // Hidden sliders; values driven by randomiseValues()
+      sizeSlider = createSlider(1, 14, 2, 1); sizeSlider.hide();
+      colsSlider = createSlider(2, 30, 14, 1); colsSlider.hide();
+      rowsSlider = createSlider(2, 30, 14, 1); rowsSlider.hide();
+      gapSlider = createSlider(0, 20, 4, 1); gapSlider.hide();
+
+      // Generate button sits in the lower-left of the canvas
+      randomButton = createButton("generate");
+      randomButton.parent("sketch-holder");
+      randomButton.position(10, 525);
+      randomButton.size(180, 24);
+      randomButton.style("background", "none");
+      randomButton.style("color", "#111");
+      randomButton.style("border", "1px solid #111");
+      randomButton.style("font-family", "sans-serif");
+      randomButton.style("font-size", "11px");
+      randomButton.style("text-transform", "lowercase");
+      randomButton.style("cursor", "pointer");
+      randomButton.mousePressed(randomiseValues);
+
+      randomiseValues();
+      loadArenaChannel();
+    }
+
+    // ——— DRAW —————————————————————————————————————————————————
+
+    function draw() {
+      if (!colsSlider || !rowsSlider || !gapSlider || !sizeSlider) return;
+
+      background(220);
+
+      // The clickable link grid is always 4x4 regardless of the visual grid
+      let linkcols = 4;
+      let linkrows = 4;
+      let linkcellW = width / linkcols;
+      let linkcellH = 400 / linkrows;
+
+      // The visual grid uses slider values
+      let cols = colsSlider.value();
+      let rows = rowsSlider.value();
+      let gap = gapSlider.value();
+
+      let cellW = width / cols;
+      let cellH = 400 / rows;
+
+      // Which 4x4 link cell is the mouse over?
+      let hoverCol = floor(mouseX / linkcellW);
+      let hoverRow = floor(mouseY / linkcellH);
+
+      let mouseIsInGrid =
+        mouseX >= 0 && mouseX < width &&
+        mouseY >= 0 && mouseY < 400;
+
+      // Pixel bounds of the hovered link cell
+      let sectionLeft = hoverCol * linkcellW;
+      let sectionRight = sectionLeft + linkcellW;
+      let sectionTop = hoverRow * linkcellH;
+      let sectionBottom = sectionTop + linkcellH;
+
+      // Slow sine pulse applied to cells inside the hovered section
+      let globalPulse = 0.75 + sin(frameCount * 0.03) * 0.25;
+
+      // ——— White background cells for the 4x4 link grid ———
+      for (let y = 0; y < linkrows; y++) {
+        for (let x = 0; x < linkcols; x++) {
+          noStroke();
+          fill(255);
+          rect(x * linkcellW, y * linkcellH, linkcellW, linkcellH);
+        }
+      }
+
+      // ——— Visual grid: cols x rows black squares ———
+      fill(0);
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          let cellLeft = x * cellW;
+          let cellRight = cellLeft + cellW;
+          let cellTop = y * cellH;
+          let cellBottom = cellTop + cellH;
+
+          // Pulse if this visual cell overlaps the hovered link section
+          let insideHoveredSection =
+            mouseIsInGrid &&
+            cellRight > sectionLeft &&
+            cellLeft < sectionRight &&
+            cellBottom > sectionTop &&
+            cellTop < sectionBottom;
+
+          let pulse = insideHoveredSection ? globalPulse : 1;
+
+          let cx = x * cellW + cellW / 2;
+          let cy = y * cellH + cellH / 2;
+          let w = (cellW - gap * 2) * pulse;
+          let h = (cellH - gap * 2) * pulse;
+
+          rect(cx - w / 2, cy - h / 2, w, h);
+        }
+      }
+
+      // ——— Hollow square shape overlay: dark grey ———
+      let shapeSize = sizeSlider.value();
+      shapeSize = min(shapeSize, cols, rows);
+
+      // Centre the shape in the grid
+      let startX = floor((cols - shapeSize) / 2);
+      let startY = floor((rows - shapeSize) / 2);
+
+      fill(60);
+
+      for (let y = 0; y < shapeSize; y++) {
+        for (let x = 0; x < shapeSize; x++) {
+
+          // Only draw perimeter cells: hollow interior
+          let isEdge =
+            x === 0 || x === shapeSize - 1 ||
+            y === 0 || y === shapeSize - 1;
+
+          if (isEdge) {
+            let gx = startX + x;
+            let gy = startY + y;
+
+            let cellLeft = gx * cellW;
+            let cellRight = cellLeft + cellW;
+            let cellTop = gy * cellH;
+            let cellBottom = cellTop + cellH;
+
+            let insideHoveredSection =
+              mouseIsInGrid &&
+              cellRight > sectionLeft &&
+              cellLeft < sectionRight &&
+              cellBottom > sectionTop &&
+              cellTop < sectionBottom;
+
+            let pulse = insideHoveredSection ? globalPulse : 1;
+
+            let cx = gx * cellW + cellW / 2;
+            let cy = gy * cellH + cellH / 2;
+            let w = (cellW - gap * 2) * pulse;
+            let h = (cellH - gap * 2) * pulse;
+
+            rect(cx - w / 2, cy - h / 2, w, h);
+          }
+        }
+      }
+
+      // ——— Work out which Are.na block is active ———
+
+      // Default placeholder shown when no cell is hovered
+      let descriptionText = "move over a square.";
+      let activeIndex = -1;
+
+      if (mouseIsInGrid && hoverRow >= 0 && hoverRow < 4 && hoverCol >= 0 && hoverCol < 4) {
+        activeIndex = hoverRow * 4 + hoverCol;
+
+        if (descriptions[activeIndex]) {
+          // Append "-- click to visit" so the user knows the cell is a link.
+          // The double-dash is intentional: matches the archival tone of the rest of the page.
+          descriptionText = descriptions[activeIndex] + " -- click to visit";
+        }
+      }
+
+      // ——— Lower UI: divider line ———
+      stroke(180);
+      strokeWeight(1);
+      line(10, 410, 390, 410);
+      noStroke();
+
+      // ——— Lower UI: description text (left half, wraps into up to ~80px tall) ———
+      fill(110);
+      textFont("Helvetica", 11);
+      textAlign(LEFT, TOP);
+      text(descriptionText.toLowerCase(), 10, 425, 180, 80);
+
+      // ——— Lower UI: image preview (right half) ———
+      let previewX = 210;
+      let previewY = 425;
+      let previewW = 180;
+      let previewH = 124;
+
+      // Grey placeholder shown while image loads or when no image exists
+      fill(220);
+      rect(previewX, previewY, previewW, previewH);
+
+      if (activeIndex >= 0 && arenaImages[activeIndex]) {
+        drawImageContained(arenaImages[activeIndex], previewX, previewY, previewW, previewH);
+      }
+    }
+
+    // ——— MOUSE CLICK: open the active block's link ——————————————
+
+    function mousePressed() {
+      // Ignore clicks outside the grid area
+      if (mouseX < 0 || mouseX >= width || mouseY < 0 || mouseY >= 400) return;
+
+      let linkcols = 4;
+      let linkrows = 4;
+      let linkcellW = width / linkcols;
+      let linkcellH = 400 / linkrows;
+
+      let col = floor(mouseX / linkcellW);
+      let row = floor(mouseY / linkcellH);
+      let index = row * 4 + col;
+
+      // Every block has a URL: either its source or its Are.na block page
+      if (links[index]) {
+        window.open(links[index], "_blank");
+      }
+    }
+
+    // ——— RANDOMISE: pick new grid params ————————————————————————
+
+    function randomiseValues() {
+      let cols = floor(random(2, 31));
+      let rows = floor(random(2, 31));
+
+      colsSlider.value(cols);
+      rowsSlider.value(rows);
+      gapSlider.value(floor(random(0, 21)));
+
+      // Shape size can't exceed the smaller grid dimension
+      let maxShape = min(cols, rows);
+      sizeSlider.value(floor(random(1, maxShape + 1)));
+    }
+  </script>
+
+</body>
+
+</html>
